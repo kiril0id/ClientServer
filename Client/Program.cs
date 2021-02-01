@@ -2,49 +2,97 @@
 using System.Text;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Client
 {
     class Program
     {
+        static string userName;
+        private const string host = "127.0.0.1";
         private const int port = 8888;
-        private const string server = "127.0.0.1";
+        static TcpClient client;
+        static NetworkStream stream;
 
         static void Main(string[] args)
         {
+            Console.Write("Введите свое имя: ");
+            userName = Console.ReadLine();
+            client = new TcpClient();
             try
             {
-                TcpClient client = new TcpClient();
-                client.Connect(server, port);
+                client.Connect(host, port); //подключение клиента
+                stream = client.GetStream(); // получаем поток
 
-                byte[] data = new byte[256];
-                StringBuilder response = new StringBuilder();
-                NetworkStream stream = client.GetStream();
+                string message = userName;
+                byte[] data = Encoding.Unicode.GetBytes(message);
+                stream.Write(data, 0, data.Length);
 
-                do
+                // запускаем новый поток для получения данных
+                Thread receiveThread = new Thread(new ThreadStart(ReceiveMessage));
+                receiveThread.Start(); //старт потока
+                Console.WriteLine("Добро пожаловать, {0}", userName);
+                SendMessage();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
+            {
+                Disconnect();
+            }
+        }
+        // отправка сообщений
+        static void SendMessage()
+        {
+            Console.WriteLine("Введите сообщение: ");
+
+            while (true)
+            {
+                string message = Console.ReadLine();
+                byte[] data = Encoding.Unicode.GetBytes(message);
+                stream.Write(data, 0, data.Length);
+            }
+        }
+        // получение сообщений
+        static void ReceiveMessage()
+        {
+            while (true)
+            {
+                try
                 {
-                    int bytes = stream.Read(data, 0, data.Length);
-                    response.Append(Encoding.UTF8.GetString(data, 0, bytes));
+                    byte[] data = new byte[64]; // буфер для получаемых данных
+                    StringBuilder builder = new StringBuilder();
+                    int bytes = 0;
+                    do
+                    {
+                        bytes = stream.Read(data, 0, data.Length);
+                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
+                    }
+                    while (stream.DataAvailable);
+
+                    string message = builder.ToString();
+                    Console.WriteLine(message);//вывод сообщения
                 }
-                while (stream.DataAvailable); // пока данные есть в потоке
-
-                Console.WriteLine(response.ToString());
-
-                // Закрываем потоки
-                stream.Close();
-                client.Close();
+                catch
+                {
+                    Console.WriteLine("Подключение прервано!"); //соединение было прервано
+                    Console.ReadLine();
+                    Disconnect();
+                }
             }
-            catch (SocketException e)
-            {
-                Console.WriteLine("SocketException: {0}", e);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine("Exception: {0}", e.Message);
-            }
+        }
 
-            Console.WriteLine("Запрос завершен...");
-            Console.Read();
+        static void Disconnect()
+        {
+            if (stream != null)
+                stream.Close();//отключение потока
+            if (client != null)
+                client.Close();//отключение клиента
+            Environment.Exit(0); //завершение процесса
         }
     }
 }
