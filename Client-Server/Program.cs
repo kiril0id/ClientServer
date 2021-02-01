@@ -7,54 +7,51 @@ namespace Client_Server
 {
     class Program
     {
-        static int port = 8005;
-
+        const int port = 8888; // порт для прослушивания подключений
         static void Main(string[] args)
         {
-            // получаем адреса для запуска сокета
-            IPEndPoint ipPoint = new IPEndPoint(IPAddress.Parse("127.12.0.1"), port);
-
-            // создаем сокет
-            Socket listenSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            TcpListener server = null;
             try
             {
-                // связываем сокет с локальной точкой, по которой будем принимать данные
-                listenSocket.Bind(ipPoint);
+                IPAddress localAddr = IPAddress.Parse("127.0.0.1");
+                server = new TcpListener(localAddr, port);
 
-                // начинаем прослушивание
-                listenSocket.Listen(10);
-
-                Console.WriteLine("Сервер запущен. Ожидание подключений...");
+                // запуск слушателя
+                server.Start();
 
                 while (true)
                 {
-                    Socket handler = listenSocket.Accept();
-                    // получаем сообщение
-                    StringBuilder builder = new StringBuilder();
-                    int bytes = 0; // количество полученных байтов
-                    byte[] data = new byte[256]; // буфер для получаемых данных
+                    Console.WriteLine("Ожидание подключений... ");
 
-                    do
-                    {
-                        bytes = handler.Receive(data);
-                        builder.Append(Encoding.Unicode.GetString(data, 0, bytes));
-                    }
-                    while (handler.Available > 0);
+                    // получаем входящее подключение
+                    TcpClient client = server.AcceptTcpClient();
+                    Console.WriteLine("Подключен клиент. Выполнение запроса...");
 
-                    Console.WriteLine(DateTime.Now.ToShortTimeString() + ": " + builder.ToString());
+                    // получаем сетевой поток для чтения и записи
+                    NetworkStream stream = client.GetStream();
 
-                    // отправляем ответ
-                    string message = "ваше сообщение доставлено";
-                    data = Encoding.Unicode.GetBytes(message);
-                    handler.Send(data);
-                    // закрываем сокет
-                    handler.Shutdown(SocketShutdown.Both);
-                    handler.Close();
+                    // сообщение для отправки клиенту
+                    string response = "Привет мир";
+                    // преобразуем сообщение в массив байтов
+                    byte[] data = Encoding.UTF8.GetBytes(response);
+
+                    // отправка сообщения
+                    stream.Write(data, 0, data.Length);
+                    Console.WriteLine("Отправлено сообщение: {0}", response);
+                    // закрываем поток
+                    stream.Close();
+                    // закрываем подключение
+                    client.Close();
                 }
             }
-            catch (Exception ex)
+            catch (Exception e)
             {
-                Console.WriteLine(ex.Message);
+                Console.WriteLine(e.Message);
+            }
+            finally
+            {
+                if (server != null)
+                    server.Stop();
             }
         }
     }
